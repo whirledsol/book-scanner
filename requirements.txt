@@ -1,0 +1,6 @@
+argparse
+pathlib
+#cv2
+pytesseract
+imutils
+numpy
