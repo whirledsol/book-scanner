@@ -15,33 +15,29 @@ import os
 import time
 from fpdf import FPDF
 
+
 def start():
     parser = argparse.ArgumentParser(description='Take a directory of text/book photos and convert to a pdf')
 
     parser.add_argument('-p','--pattern', type=str, help='file pattern', dest='pattern', default="*.jpg")
 
     parser.add_argument('-d','--directory', required=True, type=str, help='the directory to use', dest='directory')
-    
-    parser.add_argument('-f','--filename', type=str, help='the output filename identifier', dest='filename')
 
     parser.add_argument('-i','--images-only', action='store_true', help='just saves the images', dest='images_only')
 
     args = parser.parse_args()
 
-    args.filename = args.filename or f'bookscan_{time.time()}'
-    #print(args)
-    #exit()
+    args.filename = os.path.basename(args.directory)
 
-   
     paths = sorted(Path(args.directory).glob(args.pattern))
 
-    tempfolder = Path(args.directory).joinpath(f'temp_{args.filename}')
+    tempfolder = Path(args.directory).joinpath(f'temp_{args.filename}_{time.time()}')
     os.mkdir(tempfolder.resolve()) 
 
     #itterate through paths
     imgs = {}
     for path in paths:
-        print('\nCleaning {}'.format(path))
+        print(f'\nCleaning {path}')
         img = cv2.imread(str(path.resolve()))
         img = decolor(img)
         img = resize(img,1200)
@@ -52,13 +48,16 @@ def start():
         imgs[img_path] = img
     
     if not args.images_only:
-        convert_pdf(imgs)
+        convert_pdf(args,imgs)
+        os.rmdir(tempfolder.resolve())
+
 
 def decolor(img):
     #removes color but allows the img to have rgb elements going forward
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     return img
+
 
 def resize(img,resolution):
     #resizes it to something better
@@ -84,6 +83,7 @@ def addText(preview,text,color,thickness):
         preview = cv2.putText(preview, line, tuple(position), cv2.FONT_HERSHEY_PLAIN,size,color,thickness)
     return preview
 
+
 def display_preview(name,img,text=None,text2=None,copy=True):
     #copies the image and makes it viewable, returns the key pressed as chr
     preview = img
@@ -98,6 +98,7 @@ def display_preview(name,img,text=None,text2=None,copy=True):
     preview = resize(preview,600)
     cv2.imshow(name,preview)
     return chr(cv2.waitKey())
+
 
 def brightness_contrast(img, brightness = 0, contrast = 0):
     #adjust image
@@ -123,6 +124,7 @@ def brightness_contrast(img, brightness = 0, contrast = 0):
 
     return buf
 
+
 def confirmContrast(img):
     #ask the user if the contrast is ok
     print('\tConfirm Contrast')
@@ -141,7 +143,7 @@ def confirmContrast(img):
     while (True):
         choice = display_preview('confirmContrast',brightness_contrast(img,brightness=adjustments[0],contrast=adjustments[1]),copy=False,text=keys,text2=instructions)
         print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
-        if choice == '\n': break
+        if choice == chr(13): break
         elif choice == chr(27): exit()
         elif choice in adjustContrast:
             adjustments = adjustContrast[choice](adjustments)
@@ -149,6 +151,7 @@ def confirmContrast(img):
 
     cv2.destroyAllWindows()
     return brightness_contrast(img,brightness=adjustments[0],contrast=adjustments[1])
+
 
 def autoRotate(img):
     #try to rotate
@@ -165,6 +168,7 @@ def autoRotate(img):
         finally:
             return img
 
+
 def confirmRotate(img):
     #ask the user if the rotation are ok
     print('\tConfirm Rotate')
@@ -174,8 +178,8 @@ def confirmRotate(img):
     choice = None
     while True:
         choice = display_preview('confirmRotate',img,text=keys,text2=instructions)
-        print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
-        if choice == '\n': break
+        print(f'\t\tSelected ord={ord(choice)}, chr={choice}.')
+        if choice == chr(13): break
         elif choice == chr(27): exit()
         elif choice == 'r':
             img = imutils.rotate_bound(img, 90)
@@ -184,11 +188,13 @@ def confirmRotate(img):
     cv2.destroyAllWindows()
     return img
 
+
 def rotate(img):
     #tackle rotation
     img = autoRotate(img)
     img = confirmRotate(img)
     return img
+
 
 def autoBounds(img):  
     #crops to the contents minus shadows or fingers around the edge
@@ -196,7 +202,7 @@ def autoBounds(img):
     # Read image and search for contours. 
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     _,threshold = cv2.threshold(img,110,255,cv2.THRESH_BINARY)
-    _,contours,hierarchy = cv2.findContours(threshold,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+    contours,hierarchy = cv2.findContours(threshold,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
         
     ih, iw = img.shape
     
@@ -236,8 +242,8 @@ def autoBounds(img):
 
     return [int(i) for i in [y1,y2,x1,x2]]
 
+
 def confirmBounds(img,y1,y2,x1,x2):
-    
     #ask the user if the bounds are ok
     print('\tConfirm Bounds')
     choice = None
@@ -246,7 +252,7 @@ def confirmBounds(img,y1,y2,x1,x2):
         cv2.rectangle(copy,(x1,y1),(x2,y2),(255,0,255),2)
         choice = display_preview('confirmBounds',copy,copy=False)
         print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
-        if choice == '\n': break
+        if choice == chr(13): break
         elif choice == chr(27): exit()
         else:
             y1,y2,x1,x2 = adjustBounds(choice,y1,y2,x1,x2)
@@ -255,7 +261,8 @@ def confirmBounds(img,y1,y2,x1,x2):
 
     cv2.destroyAllWindows()
     return [int(i) for i in [y1,y2,x1,x2]]
-convert_pdf
+
+
 def adjustBounds(c,y1,y2,x1,x2):
     #adjust the bounds
     points = [y1,y2,x1,x2]
@@ -275,6 +282,7 @@ def adjustBounds(c,y1,y2,x1,x2):
     print('\t\tNew bounds:{}'.format(points))
     return points
 
+
 def crop(img):
     #crop the image to the bounds
     y1,y2,x1,x2 = autoBounds(img)
@@ -282,24 +290,55 @@ def crop(img):
     img = img[y1:y2, x1:x2]
     return img
 
+
 def saveImg(img,tempfolder,path):
     #saves the img to file
     savepath = str(tempfolder.joinpath(path.name).resolve())
-    print(f'\tSaving {type(img)} to {savepath}')
+    print(f'\tProcessed {savepath}')
     cv2.imwrite(savepath,img)
     return savepath
+
+
 def convert_pdf(args,imgs):
     #creates PDF from images
 
-    pdf = FPDF()
+    pw,ph = (595.28, 841.89) #from A4 documentation
+    margin = 3.0
+
+    
+    
+    pdf = FPDF('P','mm',(pw,ph))
+    pdf.set_margins(margin,margin)
+    
     for path,img in imgs.items():
         pdf.add_page()
-        w = int(img.shape[1])
-        h = int(img.shape[0])
-        pdf.image(path,5,5,w,h)
+        
+        pdf.image(path,0,0,*scale_to_page(img,pw,ph,margin))
     
-    output_path = os.path.join(args.directory,args.filename)
+    output_path = os.path.join(args.directory,f'{args.filename}.pdf')
     pdf.output(output_path, "F")
     return output_path
 
+
+def scale_to_page(img, pw, ph, margin):
+    #scales the image to the page
+
+    iw = int(img.shape[1])
+    ih = int(img.shape[0])
+
+    iar = iw/ih
+    par = pw/ph
+
+    if iar > par:
+        #w is dominant
+        scale = pw/iw
+        w = pw
+        h = ih * scale
+    else:
+        #h is dominant
+        scale = ph/ih
+        h = ph
+        w = iw * scale
+
+    return w-(2*margin),h-(2*margin)
 if  __name__ =='__main__':start()
