@@ -13,5 +13,5 @@ sudo apt install python3-opencv
 
 ## Run
 ```
-python book-scanner.py --help
+python3 book-scanner.py --help
 ```

@@ -13,6 +13,7 @@ import pytesseract
 import imutils
 import os
 import time
+from fpdf import FPDF
 
 def start():
     parser = argparse.ArgumentParser(description='Take a directory of text/book photos and convert to a pdf')
@@ -21,18 +22,24 @@ def start():
 
     parser.add_argument('-d','--directory', required=True, type=str, help='the directory to use', dest='directory')
     
+    parser.add_argument('-f','--filename', type=str, help='the output filename identifier', dest='filename')
+
+    parser.add_argument('-i','--images-only', action='store_true', help='just saves the images', dest='images_only')
+
     args = parser.parse_args()
 
+    args.filename = args.filename or f'bookscan_{time.time()}'
     #print(args)
     #exit()
 
    
     paths = sorted(Path(args.directory).glob(args.pattern))
 
-    tempfolder = Path(args.directory).joinpath('bookscan_temp_{}'.format(time.time()))
+    tempfolder = Path(args.directory).joinpath(f'temp_{args.filename}')
     os.mkdir(tempfolder.resolve()) 
 
     #itterate through paths
+    imgs = {}
     for path in paths:
         print('\nCleaning {}'.format(path))
         img = cv2.imread(str(path.resolve()))
@@ -41,8 +48,11 @@ def start():
         img = rotate(img)
         img = confirmContrast(img)
         img = crop(img)
-        saveImg(img,tempfolder,path)
-        
+        img_path = saveImg(img,tempfolder,path)
+        imgs[img_path] = img
+    
+    if not args.images_only:
+        convert_pdf(imgs)
 
 def decolor(img):
     #removes color but allows the img to have rgb elements going forward
@@ -245,7 +255,7 @@ def confirmBounds(img,y1,y2,x1,x2):
 
     cv2.destroyAllWindows()
     return [int(i) for i in [y1,y2,x1,x2]]
-
+convert_pdf
 def adjustBounds(c,y1,y2,x1,x2):
     #adjust the bounds
     points = [y1,y2,x1,x2]
@@ -274,8 +284,22 @@ def crop(img):
 
 def saveImg(img,tempfolder,path):
     #saves the img to file
-    savepath = tempfolder.joinpath(path.name).resolve()
-    print('\tSaving {} to {}'.format(type(img),savepath))
-    cv2.imwrite(str(savepath),img)
+    savepath = str(tempfolder.joinpath(path.name).resolve())
+    print(f'\tSaving {type(img)} to {savepath}')
+    cv2.imwrite(savepath,img)
+    return savepath
+def convert_pdf(args,imgs):
+    #creates PDF from images
+
+    pdf = FPDF()
+    for path,img in imgs.items():
+        pdf.add_page()
+        w = int(img.shape[1])
+        h = int(img.shape[0])
+        pdf.image(path,5,5,w,h)
+    
+    output_path = os.path.join(args.directory,args.filename)
+    pdf.output(output_path, "F")
+    return output_path
 
 if  __name__ =='__main__':start()

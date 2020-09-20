@@ -4,3 +4,4 @@ pathlib
 pytesseract
 imutils
 numpy
+fpdf
