@@ -6,14 +6,12 @@ book-scanner.py
 """
 import argparse
 from pathlib import Path
+from fpdf import FPDF
+import pytesseract
 import cv2
 import numpy as np
-import re
-import pytesseract
-import imutils
-import os
-import time
-from fpdf import FPDF
+import re,shutil,imutils,os,time
+
 
 
 def start():
@@ -49,7 +47,7 @@ def start():
     
     if not args.images_only:
         convert_pdf(args,imgs)
-        os.rmdir(tempfolder.resolve())
+        shutil.rmtree(tempfolder.resolve())
 
 
 def decolor(img):
@@ -91,9 +89,9 @@ def display_preview(name,img,text=None,text2=None,copy=True):
         preview = img.copy()
     
     if text is not None:
-        preview = addText(preview,text,(255,0,255),3)
+        preview = addText(preview,text,(255,0,0),3)
     if text2 is not None:
-        preview = addText(preview,text2,(0,255,0),2)
+        preview = addText(preview,text2,(0,0,255),2)
 
     preview = resize(preview,600)
     cv2.imshow(name,preview)
@@ -142,7 +140,7 @@ def confirmContrast(img):
 
     while (True):
         choice = display_preview('confirmContrast',brightness_contrast(img,brightness=adjustments[0],contrast=adjustments[1]),copy=False,text=keys,text2=instructions)
-        print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
+        #print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
         if choice == chr(13): break
         elif choice == chr(27): exit()
         elif choice in adjustContrast:
@@ -178,7 +176,7 @@ def confirmRotate(img):
     choice = None
     while True:
         choice = display_preview('confirmRotate',img,text=keys,text2=instructions)
-        print(f'\t\tSelected ord={ord(choice)}, chr={choice}.')
+        #print(f'\t\tSelected ord={ord(choice)}, chr={choice}.')
         if choice == chr(13): break
         elif choice == chr(27): exit()
         elif choice == 'r':
@@ -247,38 +245,39 @@ def confirmBounds(img,y1,y2,x1,x2):
     #ask the user if the bounds are ok
     print('\tConfirm Bounds')
     choice = None
-    while True:
-        copy = img.copy()
-        cv2.rectangle(copy,(x1,y1),(x2,y2),(255,0,255),2)
-        choice = display_preview('confirmBounds',copy,copy=False)
-        print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
-        if choice == chr(13): break
-        elif choice == chr(27): exit()
-        else:
-            y1,y2,x1,x2 = adjustBounds(choice,y1,y2,x1,x2)
-            
-       
+    for cardinal in range(4):
+        print(f'\t\tAdjusting {cardinal} cardinal')
+        while True:
+            copy = img.copy()
+            cv2.rectangle(copy,(x1,y1),(x2,y2),(255,0,255),2)
+            text1 = 'Adjust ' + ['top','bottom','left','right'][cardinal]
+            text2 = f'< a{" "*20} d >' if cardinal > 1 else f'^ w{" "*14} s v'
+            choice = display_preview('confirmBounds',copy,text1, text2, copy=False)
+            #print('\t\tSelected ord={}, chr={}.'.format(ord(choice),choice))
+            if choice == chr(13): break
+            elif choice == chr(27): exit()
+            else:
+                y1,y2,x1,x2 = adjustBounds(cardinal,choice,y1,y2,x1,x2)
 
     cv2.destroyAllWindows()
+
     return [int(i) for i in [y1,y2,x1,x2]]
 
 
-def adjustBounds(c,y1,y2,x1,x2):
+def adjustBounds(cardinal,c,y1,y2,x1,x2):
     #adjust the bounds
     points = [y1,y2,x1,x2]
-    cardinals = {
-        'q':2,'a':2,
-        'w':0,'s':0,
-        'e':1,'d':1,
-        'r':3,'f':3,
+    choices = {
+        'w':-1,
+        'a':-1,
+        's':1,
+        'd':1
     }
 
-    if c not in cardinals:
+    if c not in choices:
         return points
 
-    cardinal = cardinals[c]
-    direction = 1 if c in 'asdr' else -1
-    points[cardinal] = points[cardinal] + (direction*10)
+    points[cardinal] = points[cardinal] + (choices[c]*10)
     print('\t\tNew bounds:{}'.format(points))
     return points
 
@@ -301,22 +300,19 @@ def saveImg(img,tempfolder,path):
 
 def convert_pdf(args,imgs):
     #creates PDF from images
-
     pw,ph = (595.28, 841.89) #from A4 documentation
     margin = 3.0
 
-    
-    
     pdf = FPDF('P','mm',(pw,ph))
     pdf.set_margins(margin,margin)
     
     for path,img in imgs.items():
         pdf.add_page()
-        
         pdf.image(path,0,0,*scale_to_page(img,pw,ph,margin))
     
     output_path = os.path.join(args.directory,f'{args.filename}.pdf')
     pdf.output(output_path, "F")
+    print(f'\tCreated PDF {output_path}')
     return output_path
 
 
