@@ -23,6 +23,8 @@ def start():
 
     parser.add_argument('-i','--images-only', action='store_true', help='just saves the images', dest='images_only')
 
+    parser.add_argument('-b','--bw', action='store_true', help='converts to black and white', dest='decolor')
+
     args = parser.parse_args()
 
     args.filename = os.path.basename(args.directory)
@@ -37,7 +39,8 @@ def start():
     for path in paths:
         print(f'\nCleaning {path}')
         img = cv2.imread(str(path.resolve()))
-        img = decolor(img)
+        if args.decolor:
+            img = decolor(img)
         img = resize(img,1200)
         img = rotate(img)
         img = confirmContrast(img)
